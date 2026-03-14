@@ -133,7 +133,7 @@ export default function WallPage() {
 
       if (error) throw error;
 
-      if (data && data.length > 0) {
+      if (data) {
         const mapped: Post[] = data.map((row, i) => ({
           id: row.id?.toString() || i.toString(),
           content: row.content || '',
@@ -144,9 +144,9 @@ export default function WallPage() {
           color: gradientColors[i % gradientColors.length],
           liked: false,
         }));
-        setPosts(mapped);
+        setPosts(mapped.length > 0 ? mapped : mockPosts);
       } else {
-        // No data in table, use mock
+        // No data in table yet, use mock seed posts
         setPosts(mockPosts);
       }
     } catch {
@@ -198,27 +198,37 @@ export default function WallPage() {
 
     // Try to insert into Supabase
     try {
-      const { error } = await supabase
+      const { data: inserted, error } = await supabase
         .from('echo_wall')
         .insert({
           content: newContent.trim(),
           emoji: selectedEmoji,
           likes: 0,
           replies: 0,
-        });
+        })
+        .select()
+        .single();
 
       if (error) throw error;
+
+      // Use real DB id for the post so it's persistent
+      if (inserted) {
+        newPost.id = inserted.id?.toString();
+      }
     } catch {
-      // Supabase not configured — just add locally
-      console.log('Added post locally (Supabase not configured)');
+      console.log('Added post locally (Supabase insert failed)');
     }
 
-    // Add to local state regardless
+    // Add to local state and re-fetch to sync
     setPosts((prev) => [newPost, ...prev]);
     setNewContent('');
     setSelectedEmoji('💜');
     setShowModal(false);
+    setIsRecovery(false);
     setPosting(false);
+
+    // Re-fetch after short delay so DB is consistent
+    setTimeout(() => fetchPosts(), 800);
   };
 
   return (
