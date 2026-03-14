@@ -18,6 +18,8 @@ import {
 } from 'recharts';
 import PageTransition from '@/components/PageTransition';
 import GlassCard from '@/components/GlassCard';
+import { supabase } from '@/lib/supabase-browser';
+import { useEffect } from 'react';
 import {
   Activity,
   Users,
@@ -90,6 +92,50 @@ const summaryCards = [
 
 export default function PsychologistDashboard() {
   const [timeRange, setTimeRange] = useState<'6w' | '12w'>('6w');
+  const [moodCounts, setMoodCounts] = useState(weeklyMoodDistribution);
+  const [recentBriefs, setRecentBriefs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchData() {
+      setLoading(true);
+      try {
+        // Fetch Mood Distribution (Aggregate)
+        const { data: logs } = await supabase
+          .from('mood_logs')
+          .select('score');
+        
+        if (logs && logs.length > 0) {
+          const counts = [0, 0, 0, 0, 0];
+          logs.forEach((l: any) => {
+            if (l.score >= 1 && l.score <= 5) counts[l.score - 1]++;
+          });
+          
+          setMoodCounts([
+            { mood: 'Great', count: counts[4], color: '#22c55e' },
+            { mood: 'Good', count: counts[3], color: '#7c3aed' },
+            { mood: 'Neutral', count: counts[2], color: '#fbbf24' },
+            { mood: 'Low', count: counts[1], color: '#ff6b35' },
+            { mood: 'Crisis', count: counts[0], color: '#ef4444' },
+          ]);
+        }
+
+        // Fetch Recent Briefs
+        const { data: briefs } = await supabase
+          .from('briefs')
+          .select('id, summary, created_at, user_id')
+          .order('created_at', { ascending: false })
+          .limit(5);
+        
+        if (briefs) setRecentBriefs(briefs);
+      } catch (err) {
+        console.error('Error fetching psych dashboard data:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, []);
 
   return (
     <PageTransition>
@@ -253,7 +299,7 @@ export default function PsychologistDashboard() {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={weeklyMoodDistribution}
+                    data={moodCounts}
                     cx="50%"
                     cy="50%"
                     innerRadius={50}
@@ -261,7 +307,7 @@ export default function PsychologistDashboard() {
                     paddingAngle={3}
                     dataKey="count"
                   >
-                    {weeklyMoodDistribution.map((entry, idx) => (
+                    {moodCounts.map((entry, idx) => (
                       <Cell key={`cell-${idx}`} fill={pieColors[idx]} />
                     ))}
                   </Pie>
@@ -276,7 +322,7 @@ export default function PsychologistDashboard() {
               </ResponsiveContainer>
             </div>
             <div className="space-y-1.5 mt-2">
-              {weeklyMoodDistribution.map((item, i) => (
+              {moodCounts.map((item, i) => (
                 <div key={item.mood} className="flex items-center justify-between text-xs">
                   <span className="flex items-center gap-2">
                     <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: pieColors[i] }} />
@@ -285,6 +331,36 @@ export default function PsychologistDashboard() {
                   <span className="text-slate-500">{item.count}</span>
                 </div>
               ))}
+            </div>
+          </GlassCard>
+        </div>
+
+        {/* Student Briefs Section */}
+        <div className="mt-6">
+          <GlassCard delay={0.5}>
+            <h3 className="text-lg font-semibold text-white flex items-center gap-2 mb-4">
+              <Users className="w-5 h-5 text-aura" />
+              Incoming Student Briefs
+            </h3>
+            <p className="text-sm text-slate-400 mb-4">
+              Authorized AI-summarized handoffs for clinical review.
+            </p>
+            <div className="space-y-4">
+              {recentBriefs.length > 0 ? (
+                recentBriefs.map((brief) => (
+                  <div key={brief.id} className="p-4 rounded-xl glass border-white/5 hover:border-white/10 transition-all bg-white/[0.02]">
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="text-[10px] text-slate-500 font-mono">ID: {brief.user_id?.slice(0, 8)}...</span>
+                      <span className="text-[10px] text-slate-500">{new Date(brief.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <p className="text-sm text-slate-300 leading-relaxed italic">
+                      &quot;{brief.summary}&quot;
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-slate-500 py-4 text-center">No recent briefs found.</p>
+              )}
             </div>
           </GlassCard>
         </div>

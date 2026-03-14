@@ -76,14 +76,20 @@ export default function LoginPage() {
 
         if (data.user) {
           // Fetch role from profiles
-          const { data: profile } = await supabase
+          const { data: profile, error: profileError } = await supabase
             .from('profiles')
             .select('role')
             .eq('id', data.user.id)
             .single();
 
+          if (profileError) {
+            console.error('Login error fetching profile:', profileError);
+          }
+
           const userRole = profile?.role || 'student';
+          console.log('Redirecting to dashboard for role:', userRole);
           router.push(`/dashboard/${userRole}`);
+          router.refresh(); // Ensure layout updates
         }
       }
     } catch (err: unknown) {

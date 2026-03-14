@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageTransition from '@/components/PageTransition';
 import GlassCard from '@/components/GlassCard';
+import { supabase } from '@/lib/supabase-browser';
 import {
   BookOpen,
   Calendar,
@@ -92,25 +93,41 @@ export default function JournalPage() {
     tags: string[];
   }>({ score: 50, label: 'Neutral', tags: [] });
   const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [wordCount, setWordCount] = useState(0);
-  const [entries] = useState<JournalEntry[]>([
-    {
-      id: '1',
-      content: 'Felt a deep sense of clarity today after my morning walk...',
-      date: '2024-03-13',
-      tags: ['#Clarity', '#Gratitude', '#Self-Care'],
-      sentiment: 78,
-      sentimentLabel: 'Positive',
-    },
-    {
-      id: '2',
-      content: 'Work was stressful but I managed to stay grounded...',
-      date: '2024-03-12',
-      tags: ['#Growth', '#Anxiety'],
-      sentiment: 52,
-      sentimentLabel: 'Mixed',
-    },
-  ]);
+  const [entries, setEntries] = useState<JournalEntry[]>([]);
+
+  // Fetch entries
+  useEffect(() => {
+    async function fetchEntries() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data, error } = await supabase
+            .from('journal_entries')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false });
+          
+          if (data) {
+            setEntries(data.map((row: any) => ({
+              id: row.id,
+              content: row.content,
+              date: row.created_at?.split('T')[0],
+              tags: row.tags || [],
+              sentiment: row.sentiment_score,
+              sentimentLabel: row.sentiment_label
+            })));
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching journal entries:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchEntries();
+  }, []);
 
   const updateAnalysis = useCallback(() => {
     if (content.trim().length > 10) {
@@ -132,11 +149,49 @@ export default function JournalPage() {
     return () => clearTimeout(timer);
   }, [content, updateAnalysis]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!content.trim()) return;
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { data, error } = await supabase
+        .from('journal_entries')
+        .insert({
+          user_id: user.id,
+          content: content.trim(),
+          sentiment_score: analysis.score,
+          sentiment_label: analysis.label,
+          tags: analysis.tags,
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setEntries(prev => [{
+          id: data.id,
+          content: data.content,
+          date: data.created_at?.split('T')[0],
+          tags: data.tags || [],
+          sentiment: data.sentiment_score,
+          sentimentLabel: data.sentiment_label
+        }, ...prev]);
+        setContent('');
+      }
+
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      console.error('Error saving journal entry:', err);
+      alert('Failed to save entry. Make sure the journal_entries table exists and you are logged in.');
+    }
   };
+
+
 
   const getSentimentColor = (score: number) => {
     if (score > 70) return 'text-emerald-400';

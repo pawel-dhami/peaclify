@@ -18,13 +18,16 @@ export async function POST(request: NextRequest) {
 
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({
-        message: {
-          role: 'assistant',
-          content:
-            "Hey, I hear you. 💜 I'm here to listen and support you through whatever you're going through. While I'm running in demo mode right now (no API key configured), know that the full version of Peaclify will be able to have deep, meaningful conversations with you. You matter, and your feelings are valid. 🌟",
-        },
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const content = "Peaclify is in demo mode (Missing API Key). 💜 Once connected, I'll be your deep-learning emotional companion! 🌟";
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, fullContent: content })}\n\n`));
+          controller.close();
+        }
       });
+      return new Response(stream, { headers: { 'Content-Type': 'text/event-stream' } });
     }
 
     const groq = new Groq({ apiKey });

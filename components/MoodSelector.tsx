@@ -56,7 +56,17 @@ export default function MoodSelector() {
   const handleSelect = async (score: number) => {
     setSelected(score);
     try {
-      await supabase.from('mood_logs').insert({ score, created_at: new Date().toISOString() });
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('mood_logs').insert({ 
+          user_id: user.id,
+          score, 
+          created_at: new Date().toISOString() 
+        });
+      } else {
+        // Fallback for non-logged in users (demo mode)
+        await supabase.from('mood_logs').insert({ score, created_at: new Date().toISOString() });
+      }
     } catch { /* offline */ }
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
