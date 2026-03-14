@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageTransition from '@/components/PageTransition';
+import { supabase } from '@/lib/supabase-browser';
 import {
   Globe,
   Heart,
@@ -12,6 +13,7 @@ import {
   Sparkles,
   X,
   Clock,
+  Loader2,
 } from 'lucide-react';
 
 interface Post {
@@ -20,120 +22,143 @@ interface Post {
   emoji: string;
   likes: number;
   replies: number;
-  timeAgo: string;
+  created_at: string;
   color: string;
   liked: boolean;
 }
 
+const gradientColors = [
+  'from-nebula/20 to-nebula/5',
+  'from-ember/20 to-ember/5',
+  'from-warmth/20 to-warmth/5',
+  'from-serenity/20 to-serenity/5',
+  'from-aura/20 to-aura/5',
+  'from-pulse/20 to-pulse/5',
+];
+
 const mockPosts: Post[] = [
   {
     id: '1',
-    content:
-      '"The storm will pass. It always does." Needed to hear my own words today.',
+    content: '"The storm will pass. It always does." Needed to hear my own words today.',
     emoji: '🌊',
     likes: 47,
     replies: 12,
-    timeAgo: '2m ago',
+    created_at: new Date(Date.now() - 2 * 60000).toISOString(),
     color: 'from-nebula/20 to-nebula/5',
     liked: false,
   },
   {
     id: '2',
-    content:
-      'Day 30 of therapy and I finally cried in session. Feels like unlocking a door I forgot existed.',
+    content: 'Day 30 of therapy and I finally cried in session. Feels like unlocking a door I forgot existed.',
     emoji: '🔓',
     likes: 128,
     replies: 34,
-    timeAgo: '8m ago',
+    created_at: new Date(Date.now() - 8 * 60000).toISOString(),
     color: 'from-ember/20 to-ember/5',
     liked: false,
   },
   {
     id: '3',
-    content:
-      'Small win: I went outside today. Just sat on the porch for 10 minutes. It counts.',
+    content: 'Small win: I went outside today. Just sat on the porch for 10 minutes. It counts.',
     emoji: '☀️',
     likes: 256,
     replies: 45,
-    timeAgo: '15m ago',
+    created_at: new Date(Date.now() - 15 * 60000).toISOString(),
     color: 'from-warmth/20 to-warmth/5',
     liked: false,
   },
   {
     id: '4',
-    content:
-      "Reminder: You don't always need to be productive. Sometimes existing is enough.",
+    content: "Reminder: You don't always need to be productive. Sometimes existing is enough.",
     emoji: '🌙',
     likes: 312,
     replies: 28,
-    timeAgo: '22m ago',
+    created_at: new Date(Date.now() - 22 * 60000).toISOString(),
     color: 'from-serenity/20 to-serenity/5',
     liked: false,
   },
   {
     id: '5',
-    content:
-      'Started a gratitude journal today. First entry: grateful for this anonymous space where I can just be.',
+    content: 'Started a gratitude journal today. First entry: grateful for this anonymous space where I can just be.',
     emoji: '📝',
     likes: 89,
     replies: 16,
-    timeAgo: '35m ago',
+    created_at: new Date(Date.now() - 35 * 60000).toISOString(),
     color: 'from-aura/20 to-aura/5',
     liked: false,
   },
   {
     id: '6',
-    content:
-      'My anxiety said "what if everything goes wrong?" and I replied "what if everything goes right?" for the first time.',
+    content: 'My anxiety said "what if everything goes wrong?" and I replied "what if everything goes right?" for the first time.',
     emoji: '💪',
     likes: 445,
     replies: 67,
-    timeAgo: '1h ago',
+    created_at: new Date(Date.now() - 60 * 60000).toISOString(),
     color: 'from-pulse/20 to-pulse/5',
-    liked: false,
-  },
-  {
-    id: '7',
-    content:
-      'Three things I learned this week: 1) It\'s okay to rest 2) Progress isn\'t linear 3) I am not my thoughts.',
-    emoji: '📖',
-    likes: 201,
-    replies: 43,
-    timeAgo: '1h ago',
-    color: 'from-nebula/20 to-nebula/5',
-    liked: false,
-  },
-  {
-    id: '8',
-    content:
-      "Called my mom today for the first time in months. She cried. I cried. Sometimes healing starts with a phone call.",
-    emoji: '📞',
-    likes: 567,
-    replies: 89,
-    timeAgo: '2h ago',
-    color: 'from-ember/20 to-ember/5',
-    liked: false,
-  },
-  {
-    id: '9',
-    content:
-      "Meditation felt impossible today. Five minutes of trying IS the practice. Don't let perfection steal your peace.",
-    emoji: '🧘',
-    likes: 178,
-    replies: 22,
-    timeAgo: '3h ago',
-    color: 'from-aura/20 to-aura/5',
     liked: false,
   },
 ];
 
+function timeAgo(dateStr: string): string {
+  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 export default function WallPage() {
-  const [posts, setPosts] = useState<Post[]>(mockPosts);
+  const [posts, setPosts] = useState<Post[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [newContent, setNewContent] = useState('');
   const [selectedEmoji, setSelectedEmoji] = useState('💜');
+  const [loading, setLoading] = useState(true);
+  const [posting, setPosting] = useState(false);
 
   const emojis = ['💜', '🌊', '☀️', '🌙', '🔥', '🌿', '✨', '🫂', '📝', '💪'];
+
+  // Fetch posts from Supabase, fallback to mock data
+  const fetchPosts = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('echo_wall')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const mapped: Post[] = data.map((row, i) => ({
+          id: row.id?.toString() || i.toString(),
+          content: row.content || '',
+          emoji: row.emoji || '💜',
+          likes: row.likes || 0,
+          replies: row.replies || 0,
+          created_at: row.created_at || new Date().toISOString(),
+          color: gradientColors[i % gradientColors.length],
+          liked: false,
+        }));
+        setPosts(mapped);
+      } else {
+        // No data in table, use mock
+        setPosts(mockPosts);
+      }
+    } catch {
+      // Supabase not configured or table doesn't exist — use mock data
+      console.log('Using mock data for Echo Wall (Supabase not configured)');
+      setPosts(mockPosts);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPosts();
+  }, [fetchPosts]);
 
   // Create masonry columns
   const columns = useMemo(() => {
@@ -154,22 +179,44 @@ export default function WallPage() {
     );
   };
 
-  const handlePost = () => {
+  const handlePost = async () => {
     if (!newContent.trim()) return;
+    setPosting(true);
+
     const newPost: Post = {
       id: Date.now().toString(),
       content: newContent.trim(),
       emoji: selectedEmoji,
       likes: 0,
       replies: 0,
-      timeAgo: 'just now',
-      color: 'from-nebula/20 to-nebula/5',
+      created_at: new Date().toISOString(),
+      color: gradientColors[Math.floor(Math.random() * gradientColors.length)],
       liked: false,
     };
+
+    // Try to insert into Supabase
+    try {
+      const { error } = await supabase
+        .from('echo_wall')
+        .insert({
+          content: newContent.trim(),
+          emoji: selectedEmoji,
+          likes: 0,
+          replies: 0,
+        });
+
+      if (error) throw error;
+    } catch {
+      // Supabase not configured — just add locally
+      console.log('Added post locally (Supabase not configured)');
+    }
+
+    // Add to local state regardless
     setPosts((prev) => [newPost, ...prev]);
     setNewContent('');
     setSelectedEmoji('💜');
     setShowModal(false);
+    setPosting(false);
   };
 
   return (
@@ -209,66 +256,73 @@ export default function WallPage() {
           </motion.button>
         </div>
 
-        {/* Masonry Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {columns.map((column, colIndex) => (
-            <div key={colIndex} className="space-y-4">
-              {column.map((post, i) => (
-                <motion.div
-                  key={post.id}
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: '-50px' }}
-                  transition={{ delay: i * 0.05, duration: 0.5 }}
-                  className={`glass-card p-5 relative overflow-hidden group`}
-                >
-                  {/* Gradient accent */}
-                  <div
-                    className={`absolute inset-0 bg-gradient-to-br ${post.color} opacity-0 group-hover:opacity-100 transition-opacity duration-500`}
-                  />
+        {/* Loading State */}
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-8 h-8 text-nebula animate-spin" />
+          </div>
+        ) : (
+          /* Masonry Grid */
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {columns.map((column, colIndex) => (
+              <div key={colIndex} className="space-y-4">
+                {column.map((post, i) => (
+                  <motion.div
+                    key={post.id}
+                    initial={{ opacity: 0, y: 30 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: '-50px' }}
+                    transition={{ delay: i * 0.05, duration: 0.5 }}
+                    className={`glass-card p-5 relative overflow-hidden group`}
+                  >
+                    {/* Gradient accent */}
+                    <div
+                      className={`absolute inset-0 bg-gradient-to-br ${post.color} opacity-0 group-hover:opacity-100 transition-opacity duration-500`}
+                    />
 
-                  <div className="relative z-10">
-                    {/* Emoji + Time */}
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-xl">{post.emoji}</span>
-                      <span className="text-[10px] text-slate-500 flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {post.timeAgo}
-                      </span>
+                    <div className="relative z-10">
+                      {/* Emoji + Time */}
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xl">{post.emoji}</span>
+                        <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {timeAgo(post.created_at)}
+                        </span>
+                      </div>
+
+                      {/* Content */}
+                      <p className="text-sm sm:text-base text-slate-200 leading-relaxed mb-4">
+                        {post.content}
+                      </p>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-4">
+                        <motion.button
+                          whileTap={{ scale: 0.8 }}
+                          onClick={() => handleLike(post.id)}
+                          className={`flex items-center gap-1.5 text-xs transition-colors ${
+                            post.liked
+                              ? 'text-red-400'
+                              : 'text-slate-500 hover:text-red-400'
+                          }`}
+                        >
+                          <Heart
+                            className={`w-4 h-4 ${post.liked ? 'fill-current' : ''}`}
+                          />
+                          {post.likes}
+                        </motion.button>
+                        <button className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors">
+                          <MessageSquare className="w-4 h-4" />
+                          {post.replies}
+                        </button>
+                      </div>
                     </div>
-
-                    {/* Content */}
-                    <p className="text-sm sm:text-base text-slate-200 leading-relaxed mb-4">
-                      {post.content}
-                    </p>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-4">
-                      <motion.button
-                        whileTap={{ scale: 0.8 }}
-                        onClick={() => handleLike(post.id)}
-                        className={`flex items-center gap-1.5 text-xs transition-colors ${
-                          post.liked
-                            ? 'text-red-400'
-                            : 'text-slate-500 hover:text-red-400'
-                        }`}
-                      >
-                        <Heart
-                          className={`w-4 h-4 ${post.liked ? 'fill-current' : ''}`}
-                        />
-                        {post.likes}
-                      </motion.button>
-                      <button className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors">
-                        <MessageSquare className="w-4 h-4" />
-                        {post.replies}
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          ))}
-        </div>
+                  </motion.div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Post Creation Modal */}
         <AnimatePresence>
@@ -337,10 +391,15 @@ export default function WallPage() {
                     whileHover={{ scale: 1.03 }}
                     whileTap={{ scale: 0.97 }}
                     onClick={handlePost}
-                    disabled={!newContent.trim()}
+                    disabled={!newContent.trim() || posting}
                     className="glow-btn flex items-center gap-2 text-sm disabled:opacity-40"
                   >
-                    <Send className="w-4 h-4" /> Post Echo
+                    {posting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4" />
+                    )}
+                    Post Echo
                   </motion.button>
                 </div>
               </motion.div>

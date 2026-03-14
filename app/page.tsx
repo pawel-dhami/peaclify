@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import GlassCard from '@/components/GlassCard';
 import PageTransition from '@/components/PageTransition';
+import SplineScene from '@/components/SplineScene';
 import {
   Brain,
   Heart,
@@ -60,34 +61,11 @@ export default function HomePage() {
       <div className="relative">
         {/* ======== HERO SECTION ======== */}
         <section className="relative min-h-[90vh] flex items-center justify-center px-4 overflow-hidden">
-          {/* Animated canvas-like background effect */}
+          {/* Spline 3D Background (with error boundary fallback) */}
           <div className="absolute inset-0 z-0">
-            {/* Floating orbs */}
-            {[...Array(6)].map((_, i) => (
-              <motion.div
-                key={i}
-                className="absolute rounded-full"
-                style={{
-                  width: `${60 + i * 30}px`,
-                  height: `${60 + i * 30}px`,
-                  background: `radial-gradient(circle, ${
-                    ['rgba(124,58,237,0.15)', 'rgba(255,107,53,0.1)', 'rgba(59,130,246,0.12)', 'rgba(6,182,212,0.1)', 'rgba(167,139,250,0.12)', 'rgba(251,191,36,0.1)'][i]
-                  }, transparent 70%)`,
-                  left: `${10 + i * 15}%`,
-                  top: `${15 + (i % 3) * 25}%`,
-                }}
-                animate={{
-                  y: [0, -30, 0],
-                  x: [0, i % 2 === 0 ? 20 : -20, 0],
-                  scale: [1, 1.1, 1],
-                }}
-                transition={{
-                  duration: 5 + i * 0.8,
-                  repeat: Infinity,
-                  ease: 'easeInOut',
-                }}
-              />
-            ))}
+            <SplineScene />
+            {/* Dark gradient overlay for text readability */}
+            <div className="absolute inset-0 bg-gradient-to-b from-void/40 via-void/60 to-void/90 pointer-events-none" />
           </div>
 
           <div className="relative z-10 text-center max-w-4xl mx-auto">

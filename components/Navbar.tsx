@@ -12,6 +12,7 @@ import {
   Globe,
   Menu,
   X,
+  LogIn,
 } from 'lucide-react';
 
 const navLinks = [
@@ -20,6 +21,7 @@ const navLinks = [
   { href: '/chat', label: 'Chat', icon: MessageCircle },
   { href: '/journal', label: 'Journal', icon: BookOpen },
   { href: '/wall', label: 'Echo Wall', icon: Globe },
+  { href: '/login', label: 'Login', icon: LogIn },
 ];
 
 export default function Navbar() {

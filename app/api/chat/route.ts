@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { groq, SYSTEM_PROMPT } from '@/lib/groq';
 
-export const runtime = 'edge';
-
 export async function POST(request: NextRequest) {
   try {
     const { messages } = await request.json();
@@ -26,18 +24,51 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Stream the response for better UX
     const completion = await groq.chat.completions.create({
       model: 'llama3-70b-8192',
       messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
       temperature: 0.7,
       max_tokens: 1024,
       top_p: 0.9,
+      stream: true,
     });
 
-    const responseMessage = completion.choices[0]?.message;
+    // Create a streaming response
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          let fullContent = '';
+          for await (const chunk of completion) {
+            const content = chunk.choices[0]?.delta?.content || '';
+            if (content) {
+              fullContent += content;
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
+              );
+            }
+          }
+          // Send the complete message at the end
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({ done: true, fullContent })}\n\n`
+            )
+          );
+          controller.close();
+        } catch (err) {
+          console.error('Streaming error:', err);
+          controller.error(err);
+        }
+      },
+    });
 
-    return NextResponse.json({
-      message: responseMessage,
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      },
     });
   } catch (error: unknown) {
     console.error('Chat API error:', error);
