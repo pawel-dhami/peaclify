@@ -6,8 +6,10 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase-browser';
 import {
   Mail, Lock, Eye, EyeOff, ArrowRight, Loader2,
-  GraduationCap, Stethoscope, Sparkles, CheckCircle,
+  GraduationCap, Stethoscope, Sparkles, CheckCircle, KeyRound,
 } from 'lucide-react';
+
+const PSYCH_ACCESS_CODE = '12345';
 
 type AuthMode = 'login' | 'signup';
 type UserRole = 'student' | 'psychologist';
@@ -27,13 +29,22 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [accessCode, setAccessCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(''); setSuccess(''); setLoading(true);
+    setError(''); setSuccess('');
+
+    // Gate: psychologist access code check
+    if (role === 'psychologist' && accessCode !== PSYCH_ACCESS_CODE) {
+      setError('Invalid psychologist access code. Please enter the correct code to continue.');
+      return;
+    }
+
+    setLoading(true);
 
     try {
       if (mode === 'signup') {
@@ -206,6 +217,32 @@ export default function LoginPage() {
                 Select your role so we can show the right portal if lookup fails.
               </p>
             )}
+
+            {/* Psychologist Access Code */}
+            <AnimatePresence>
+              {role === 'psychologist' && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mt-4 overflow-hidden"
+                >
+                  <div className="relative">
+                    <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-ember" />
+                    <input
+                      type="password"
+                      value={accessCode}
+                      onChange={e => setAccessCode(e.target.value)}
+                      placeholder="Psychologist access code"
+                      className="w-full bg-ember/5 text-white placeholder-slate-500 text-sm rounded-xl border border-ember/30 pl-11 pr-4 py-3.5 outline-none focus:border-ember/60 focus:ring-1 focus:ring-ember/20 transition-all"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-600 mt-1.5 pl-1">
+                    🔐 Required for psychologist access. Contact admin if you don&apos;t have a code.
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Form */}
