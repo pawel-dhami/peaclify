@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 import Navbar from '@/components/Navbar';
 import AuroraBackground from '@/components/AuroraBackground';
+import SmartBanner from '@/components/SmartBanner';
+import EmergencyHelp from '@/components/EmergencyHelp';
 
 export const metadata: Metadata = {
   title: 'Peaclify — Find Your Peace',
@@ -20,9 +22,11 @@ export default function RootLayout({
       <body className="antialiased">
         <AuroraBackground />
         <Navbar />
+        <SmartBanner />
         <main className="relative z-10 min-h-screen pt-20">
           {children}
         </main>
+        <EmergencyHelp />
       </body>
     </html>
   );

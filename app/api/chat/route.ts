@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { groq, SYSTEM_PROMPT } from '@/lib/groq';
+import Groq from 'groq-sdk';
+
+export const runtime = 'edge';
+
+const SYSTEM_PROMPT = `You are Peaclify, a soulful, witty, and deeply empathetic companion for young adults navigating their mental health journey. You speak with warmth, emotional intelligence, and just enough humor to make hard conversations feel safe. You never diagnose or prescribe — instead, you listen deeply, validate feelings, suggest coping strategies, and gently encourage professional support when needed. You use modern, relatable language without being condescending. Think of yourself as a wise best friend who also happens to understand psychology deeply. Keep responses concise but meaningful.`;
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,7 +18,6 @@ export async function POST(request: NextRequest) {
 
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
-      // Return a mock response if no API key is set
       return NextResponse.json({
         message: {
           role: 'assistant',
@@ -24,7 +27,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Stream the response for better UX
+    const groq = new Groq({ apiKey });
+
     const completion = await groq.chat.completions.create({
       model: 'llama3-70b-8192',
       messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
@@ -34,7 +38,6 @@ export async function POST(request: NextRequest) {
       stream: true,
     });
 
-    // Create a streaming response
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
@@ -49,7 +52,6 @@ export async function POST(request: NextRequest) {
               );
             }
           }
-          // Send the complete message at the end
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({ done: true, fullContent })}\n\n`

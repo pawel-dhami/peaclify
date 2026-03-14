@@ -117,6 +117,8 @@ export default function WallPage() {
   const [selectedEmoji, setSelectedEmoji] = useState('💜');
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
+  const [uniFilter, setUniFilter] = useState<'LPU' | 'Global'>('LPU');
+  const [isRecovery, setIsRecovery] = useState(false);
 
   const emojis = ['💜', '🌊', '☀️', '🌙', '🔥', '🌿', '✨', '🫂', '📝', '💪'];
 
@@ -256,6 +258,27 @@ export default function WallPage() {
           </motion.button>
         </div>
 
+        {/* University Filter */}
+        <div className="flex items-center gap-3 mb-6">
+          {(['LPU', 'Global'] as const).map(u => (
+            <button
+              key={u}
+              onClick={() => setUniFilter(u)}
+              className={`px-4 py-1.5 rounded-full text-sm border transition-all ${
+                uniFilter === u
+                  ? 'bg-nebula/20 border-nebula/50 text-white'
+                  : 'border-white/10 text-slate-400 hover:text-white'
+              }`}
+            >
+              {u === 'LPU' ? '🎓 LPU' : '🌐 Global'}
+            </button>
+          ))}
+          {/* #Exams badge — shows when posts tagged with exams */}
+          <span className="ml-auto text-[11px] bg-nebula/15 border border-nebula/30 text-nebula px-3 py-1 rounded-full">
+            847 students feeling this ✦ #Exams
+          </span>
+        </div>
+
         {/* Loading State */}
         {loading ? (
           <div className="flex items-center justify-center py-20">
@@ -352,9 +375,18 @@ export default function WallPage() {
                   <Sparkles className="w-5 h-5 text-nebula" />
                   Share Your Echo
                 </h3>
-                <p className="text-sm text-slate-400 mb-6">
+                <p className="text-sm text-slate-400 mb-4">
                   Your voice matters. Post anonymously.
                 </p>
+                {/* Recovery Story toggle */}
+                <label className="flex items-center gap-2 mb-4 cursor-pointer">
+                  <div className={`w-9 h-5 rounded-full transition-colors ${isRecovery ? 'bg-nebula' : 'bg-white/10'} relative`}>
+                    <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${isRecovery ? 'translate-x-4' : ''}`} />
+                  </div>
+                  <input type="checkbox" className="sr-only" checked={isRecovery} onChange={e => setIsRecovery(e.target.checked)} />
+                  <span className="text-xs text-slate-300">🌱 Recovery Story</span>
+                  {isRecovery && <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full">Recovery</span>}
+                </label>
 
                 {/* Emoji Picker */}
                 <div className="flex gap-2 mb-4 flex-wrap">

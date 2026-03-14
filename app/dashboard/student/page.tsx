@@ -15,6 +15,7 @@ import {
 } from 'recharts';
 import PageTransition from '@/components/PageTransition';
 import GlassCard from '@/components/GlassCard';
+import MoodSelector from '@/components/MoodSelector';
 import Link from 'next/link';
 import {
   Activity,
@@ -28,6 +29,7 @@ import {
   Zap,
   BookOpen,
   MessageCircle,
+  CalendarCheck,
 } from 'lucide-react';
 
 const moodData7d = [
@@ -138,6 +140,16 @@ export default function StudentDashboard() {
                 Journal
               </motion.button>
             </Link>
+            <Link href="/book">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="glass px-4 py-2.5 text-sm text-slate-300 hover:text-white flex items-center gap-2 rounded-xl transition-colors"
+              >
+                <CalendarCheck className="w-4 h-4 text-nebula" />
+                Counselor
+              </motion.button>
+            </Link>
             <Link href="/chat">
               <motion.button
                 whileHover={{ scale: 1.05 }}
@@ -150,6 +162,9 @@ export default function StudentDashboard() {
             </Link>
           </div>
         </div>
+
+        {/* Mood Check-in */}
+        <MoodSelector />
 
         {/* Stat Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
