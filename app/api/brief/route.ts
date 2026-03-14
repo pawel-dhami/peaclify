@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
 
     const groq = new Groq({ apiKey });
     const completion = await groq.chat.completions.create({
-      model: 'llama3-8b-8192',
+      model: 'llama-3.1-8b-instant',
       messages: [{
         role: 'user',
         content: `Write a 3-sentence counselor brief summarizing this student's mental state. Mood scores (1-5) over 7 days: ${moodStr}. Journal excerpts: ${journalStr}. Be factual, empathetic, and professional.`
