@@ -12,6 +12,14 @@ import {
 type AuthMode = 'login' | 'signup';
 type UserRole = 'student' | 'psychologist';
 
+// Save role to localStorage as a reliable fallback
+function saveRoleLocally(userId: string, role: UserRole) {
+  try { localStorage.setItem(`peaclify_role_${userId}`, role); } catch {}
+}
+function getRoleLocally(userId: string): UserRole | null {
+  try { return localStorage.getItem(`peaclify_role_${userId}`) as UserRole | null; } catch { return null; }
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<AuthMode>('login');
@@ -26,31 +34,78 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(''); setSuccess(''); setLoading(true);
+
     try {
       if (mode === 'signup') {
         const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
         if (signUpError) throw signUpError;
+
         if (data.user) {
-          await supabase.from('profiles').upsert({
-            id: data.user.id, email: data.user.email, role,
-            created_at: new Date().toISOString(),
-          });
+          // Save role locally FIRST as reliable fallback
+          saveRoleLocally(data.user.id, role);
+
+          // Try to save to Supabase (only id and role — no email column)
+          try {
+            await supabase.from('profiles').upsert({
+              id: data.user.id,
+              role,
+              created_at: new Date().toISOString(),
+            });
+          } catch (profileErr) {
+            console.warn('Profile upsert failed (using local fallback):', profileErr);
+          }
+
           setSuccess('Account created! Check your email to verify, then log in.');
           setMode('login');
         }
+
       } else {
+        // Sign in
         const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         if (signInError) throw signInError;
+
         if (data.user) {
-          const { data: profile } = await supabase
-            .from('profiles').select('role').eq('id', data.user.id).single();
-          const userRole = profile?.role || 'student';
+          let userRole: UserRole = 'student';
+
+          // 1. Try Supabase profiles table
+          try {
+            const { data: profile, error: profileError } = await supabase
+              .from('profiles')
+              .select('role')
+              .eq('id', data.user.id)
+              .single();
+
+            if (!profileError && profile?.role) {
+              userRole = profile.role as UserRole;
+            } else {
+              throw new Error('Profile fetch failed');
+            }
+          } catch {
+            // 2. Fallback: check localStorage
+            const localRole = getRoleLocally(data.user.id);
+            if (localRole) {
+              userRole = localRole;
+            } else {
+              // 3. Fallback: use role selected in UI (for current session)
+              userRole = role;
+            }
+          }
+
+          // Save locally for future logins too
+          saveRoleLocally(data.user.id, userRole);
+
           router.push(`/dashboard/${userRole}`);
           router.refresh();
         }
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Something went wrong');
+      const msg = err instanceof Error ? err.message : 'Something went wrong';
+      // Make "Failed to fetch" human readable
+      if (msg.includes('fetch') || msg.includes('network') || msg.includes('placeholder')) {
+        setError('Supabase is not configured. Please add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to your .env.local file.');
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -118,38 +173,39 @@ export default function LoginPage() {
             ))}
           </div>
 
-          {/* Role Selector — shown on both login and signup */}
+          {/* Role Selector — always visible */}
           <div className="mb-6">
-            <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-3">I am a...</p>
+            <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-3">
+              {mode === 'login' ? 'My role is...' : 'I am signing up as...'}
+            </p>
             <div className="grid grid-cols-2 gap-3">
-              {/* Student */}
               <button onClick={() => setRole('student')}
                 className={`relative p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2
-                  ${role === 'student' ? 'border-nebula bg-nebula/10' : 'border-white/10 bg-white/5 hover:border-white/20'}`}>
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center
+                  ${role === 'student' ? 'border-nebula bg-nebula/10 shadow-lg shadow-nebula/10' : 'border-white/10 bg-white/5 hover:border-white/20'}`}>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all
                   ${role === 'student' ? 'bg-nebula/30' : 'bg-white/5'}`}>
                   <GraduationCap className={`w-5 h-5 ${role === 'student' ? 'text-nebula' : 'text-slate-400'}`} />
                 </div>
                 <span className={`text-sm font-semibold ${role === 'student' ? 'text-white' : 'text-slate-400'}`}>Student</span>
-                {role === 'student' && (
-                  <CheckCircle className="absolute top-2 right-2 w-4 h-4 text-nebula" />
-                )}
+                {role === 'student' && <CheckCircle className="absolute top-2 right-2 w-4 h-4 text-nebula" />}
               </button>
 
-              {/* Psychologist */}
               <button onClick={() => setRole('psychologist')}
                 className={`relative p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2
-                  ${role === 'psychologist' ? 'border-ember bg-ember/10' : 'border-white/10 bg-white/5 hover:border-white/20'}`}>
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center
+                  ${role === 'psychologist' ? 'border-ember bg-ember/10 shadow-lg shadow-ember/10' : 'border-white/10 bg-white/5 hover:border-white/20'}`}>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all
                   ${role === 'psychologist' ? 'bg-ember/30' : 'bg-white/5'}`}>
                   <Stethoscope className={`w-5 h-5 ${role === 'psychologist' ? 'text-ember' : 'text-slate-400'}`} />
                 </div>
                 <span className={`text-sm font-semibold ${role === 'psychologist' ? 'text-white' : 'text-slate-400'}`}>Psychologist</span>
-                {role === 'psychologist' && (
-                  <CheckCircle className="absolute top-2 right-2 w-4 h-4 text-ember" />
-                )}
+                {role === 'psychologist' && <CheckCircle className="absolute top-2 right-2 w-4 h-4 text-ember" />}
               </button>
             </div>
+            {mode === 'login' && (
+              <p className="text-[10px] text-slate-600 mt-2 text-center">
+                Select your role so we can show the right portal if lookup fails.
+              </p>
+            )}
           </div>
 
           {/* Form */}
@@ -172,12 +228,11 @@ export default function LoginPage() {
               </button>
             </div>
 
-            {/* Feedback */}
             <AnimatePresence>
               {error && (
                 <motion.p initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                   className="text-sm text-red-400 bg-red-400/10 rounded-xl px-4 py-3 border border-red-400/20">
-                  {error}
+                  ⚠ {error}
                 </motion.p>
               )}
               {success && (
@@ -195,9 +250,10 @@ export default function LoginPage() {
                   ? 'bg-gradient-to-r from-ember to-orange-500 shadow-ember/20 hover:shadow-ember/40'
                   : 'bg-gradient-to-r from-nebula to-violet-500 shadow-nebula/20 hover:shadow-nebula/40'
                 }`}>
-              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
-                <>{mode === 'login' ? 'Sign In' : 'Create Account'} <ArrowRight className="w-4 h-4" /></>
-              )}
+              {loading
+                ? <Loader2 className="w-5 h-5 animate-spin" />
+                : <>{mode === 'login' ? 'Sign In' : 'Create Account'} <ArrowRight className="w-4 h-4" /></>
+              }
             </motion.button>
           </form>
 
@@ -208,9 +264,7 @@ export default function LoginPage() {
               {mode === 'login' ? 'Sign up free' : 'Log in'}
             </button>
           </p>
-          <p className="text-center text-[10px] text-slate-600 mt-3">
-            🔒 Your data is encrypted and never shared.
-          </p>
+          <p className="text-center text-[10px] text-slate-600 mt-3">🔒 Your data is encrypted and never shared.</p>
         </motion.div>
       </div>
     </div>
